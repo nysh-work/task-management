@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { getTaskById, updateTask, deleteTask } from "@/lib/db-utils"
-import { getUserIdFromSession } from "@/lib/auth-utils"
+import { getUserIdFromSessionServer } from "@/lib/auth-utils"
 
 // Schema for task update
 const updateTaskSchema = z.object({
@@ -17,7 +17,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const userId = await getUserIdFromSession();
+  const userId = await getUserIdFromSessionServer();
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -48,7 +48,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const userId = await getUserIdFromSession();
+  const userId = await getUserIdFromSessionServer();
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -89,7 +89,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const userId = await getUserIdFromSession();
+  const userId = await getUserIdFromSessionServer();
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

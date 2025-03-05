@@ -1,9 +1,5 @@
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-
-// For TypeScript, create our own declaration to suppress errors
-declare module "next-auth" {
-  function auth(): Promise<{ user?: { id?: string, name?: string, email?: string, image?: string } } | null>;
-}
+import { headers, cookies } from "next/headers";
 
 // Try to get the user ID from the session, with fallback for development
 export async function getUserIdFromSession() {
@@ -13,29 +9,60 @@ export async function getUserIdFromSession() {
       return process.env.DEFAULT_USER_ID || '1';
     }
     
-    let session;
-    
-    try {
-      // NextAuth v5 approach - use dynamic import to avoid static type checking
-      const nextAuth = await import("next-auth");
-      session = await (nextAuth as any).auth();
-    } catch (e) {
-      console.warn("NextAuth auth() failed, trying fallback method");
-      try {
-        // Fallback for NextAuth v4
-        const nextAuth = await import("next-auth");
-        const getServerSession = (nextAuth as any).getServerSession;
-        if (typeof getServerSession === 'function') {
-          session = await getServerSession(authOptions);
-        }
-      } catch (e2) {
-        console.error("All NextAuth session methods failed", e2);
-      }
+    // During prerendering on Vercel, just return null to prevent errors
+    if (typeof window === 'undefined' && process.env.VERCEL) {
+      return null;
     }
     
-    return session?.user?.id;
+    try {
+      // Safer approach that doesn't rely on specific NextAuth imports
+      // This should work with both v4 and v5
+      const response = await fetch('/api/auth/session');
+      
+      if (response.ok) {
+        const session = await response.json();
+        return session?.user?.id;
+      }
+    } catch (error) {
+      console.warn("Failed to fetch session via API", error);
+      // Continue to fallback methods
+    }
+    
+    return null;
   } catch (error) {
     console.error("Error getting user ID:", error);
+    return null;
+  }
+}
+
+// For API routes and server-side code
+export async function getUserIdFromSessionServer() {
+  try {
+    // For development, return a default user ID
+    if (process.env.NODE_ENV !== 'production') {
+      return process.env.DEFAULT_USER_ID || '1';
+    }
+    
+    // Create a basic session endpoint handler for server components
+    const cookieStore = cookies();
+    const headersList = headers();
+    
+    // Use fetch with the session cookie to hit our own session endpoint
+    const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/session`, {
+      headers: {
+        cookie: cookieStore.toString(),
+        ...Object.fromEntries(headersList.entries())
+      }
+    });
+    
+    if (response.ok) {
+      const session = await response.json();
+      return session?.user?.id;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error getting user ID from server:", error);
     return null;
   }
 } 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { getUserTasks, createTask } from "@/lib/db-utils"
-import { getUserIdFromSession } from "@/lib/auth-utils"
+import { getUserIdFromSessionServer } from "@/lib/auth-utils"
 
 // Schema for task creation
 const createTaskSchema = z.object({
@@ -24,7 +24,7 @@ const createTaskSchema = z.object({
 
 // GET /api/tasks - Get all tasks for the authenticated user
 export async function GET() {
-  const userId = await getUserIdFromSession();
+  const userId = await getUserIdFromSessionServer();
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -44,7 +44,7 @@ export async function GET() {
 
 // POST /api/tasks - Create a new task
 export async function POST(req: NextRequest) {
-  const userId = await getUserIdFromSession();
+  const userId = await getUserIdFromSessionServer();
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
