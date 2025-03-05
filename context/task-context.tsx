@@ -92,9 +92,26 @@ interface TaskContextProps {
   refreshTasks: () => Promise<void>
 }
 
-const TaskContext = createContext<TaskContextProps | undefined>(undefined)
+// Default task context value for prerendering
+const defaultTaskContext: TaskContextProps = {
+  state: initialState,
+  addTask: async () => {},
+  updateTask: async () => {},
+  deleteTask: async () => {},
+  toggleComplete: async () => {},
+  refreshTasks: async () => {},
+}
+
+const TaskContext = createContext<TaskContextProps>(defaultTaskContext)
 
 export function TaskProvider({ children }: { children: ReactNode }) {
+  // During prerendering, just render children with default context
+  if (typeof window === 'undefined' && 
+      (process.env.VERCEL || process.env.NEXT_PHASE === 'phase-production-build')) {
+    console.log("Using default task context during prerendering");
+    return <TaskContext.Provider value={defaultTaskContext}>{children}</TaskContext.Provider>;
+  }
+
   const [state, dispatch] = useReducer(taskReducer, initialState)
   const { user } = useAuth()
   const { toast } = useToast()
@@ -344,9 +361,6 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
 export function useTaskContext() {
   const context = useContext(TaskContext)
-  if (context === undefined) {
-    throw new Error("useTaskContext must be used within a TaskProvider")
-  }
   return context
 }
 
