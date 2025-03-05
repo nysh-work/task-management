@@ -1,13 +1,31 @@
 import NextAuth from "next-auth"
+import type { Session, DefaultSession, NextAuthConfig } from "next-auth"
+import type { JWT } from "next-auth/jwt"
 import CredentialsProvider from "next-auth/providers/credentials"
 import GoogleProvider from "next-auth/providers/google"
 import bcrypt from "bcrypt"
-import { NextAuthOptions } from "next-auth"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { z } from "zod"
 import prisma from "@/lib/prisma"
+import { AdapterUser } from "@auth/core/adapters"
+import { Account } from "@auth/core/types"
 
-export const authOptions: NextAuthOptions = {
+declare module "next-auth" {
+  interface Session extends DefaultSession {
+    user: {
+      id: string
+    } & DefaultSession["user"]
+  }
+}
+
+type User = {
+  id: string
+  name: string | null
+  email: string
+  image: string | null
+}
+
+export const authOptions = {
   adapter: PrismaAdapter(prisma) as any,
   providers: [
     CredentialsProvider({
@@ -62,6 +80,18 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  cookies: {
+    sessionToken: {
+      name: `__Secure-next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true,
+      },
+    },
   },
   pages: {
     signIn: "/auth/signin",
@@ -69,20 +99,21 @@ export const authOptions: NextAuthOptions = {
     error: "/auth/error",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id
       }
       return token
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: Session; token: JWT }) {
       if (session.user) {
         session.user.id = token.id as string
       }
       return session
     },
   },
-}
+  secret: process.env.NEXTAUTH_SECRET,
+} satisfies NextAuthConfig
 
 const handler = NextAuth(authOptions)
-export { handler as GET, handler as POST } 
+export { handler as GET, handler as POST }
