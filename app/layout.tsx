@@ -25,6 +25,11 @@ export const viewport: Viewport = {
   userScalable: false,
 }
 
+// Detect if we're in a static generation or prerendering context
+const isStaticRendering = 
+  process.env.VERCEL || 
+  process.env.NEXT_PHASE === 'phase-production-build';
+
 export default function RootLayout({
   children,
 }: {
@@ -39,13 +44,20 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <SessionProvider>
-            <AuthProvider>
-              <TaskProvider>
-                {children}
-              </TaskProvider>
-            </AuthProvider>
-          </SessionProvider>
+          {isStaticRendering ? (
+            // During prerendering/static build, don't use auth providers
+            // This prevents "e is not a function" errors
+            <div className="min-h-screen">{children}</div>
+          ) : (
+            // During normal operation, use the full provider structure
+            <SessionProvider>
+              <AuthProvider>
+                <TaskProvider>
+                  {children}
+                </TaskProvider>
+              </AuthProvider>
+            </SessionProvider>
+          )}
         </ThemeProvider>
       </body>
     </html>

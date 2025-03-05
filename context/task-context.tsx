@@ -98,10 +98,15 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(taskReducer, initialState)
   const { user } = useAuth()
   const { toast } = useToast()
+  
+  // Skip fetch operations during prerendering to avoid errors
+  const isPrerendering = typeof window === 'undefined' && 
+    (process.env.VERCEL || process.env.NEXT_PHASE === 'phase-production-build');
 
   // Fetch tasks from the API
   async function fetchTasks() {
-    if (!user) return;
+    // Skip during prerendering
+    if (isPrerendering || !user) return;
     
     dispatch({ type: "SET_LOADING" })
     
@@ -130,6 +135,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   // Fetch tasks on initial load and when user changes
   useEffect(() => {
+    // Skip during prerendering
+    if (isPrerendering) return;
+    
     if (user) {
       fetchTasks()
     }
@@ -137,7 +145,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   // Add a new task
   async function addTask(taskData: Omit<Task, "id" | "createdAt" | "updatedAt">) {
-    if (!user) return
+    // Skip during prerendering
+    if (isPrerendering || !user) return;
     
     try {
       // Format the task data for the API
@@ -198,7 +207,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   // Update a task
   async function updateTask(task: Task) {
-    if (!user) return
+    // Skip during prerendering
+    if (isPrerendering || !user) return;
     
     try {
       // Format the task data for the API
@@ -242,7 +252,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   // Delete a task
   async function deleteTask(id: string) {
-    if (!user) return
+    // Skip during prerendering
+    if (isPrerendering || !user) return;
     
     try {
       const response = await fetch(`/api/tasks/${id}`, {
@@ -272,7 +283,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   // Toggle task completion status
   async function toggleComplete(id: string) {
-    if (!user) return
+    // Skip during prerendering
+    if (isPrerendering || !user) return;
     
     const task = state.tasks.find(t => t.id === id)
     if (!task) return
@@ -308,6 +320,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   // Function to manually refresh tasks
   async function refreshTasks() {
+    // Skip during prerendering
+    if (isPrerendering) return;
+    
     await fetchTasks()
   }
 
