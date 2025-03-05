@@ -10,7 +10,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "db:seed": "tsx scripts/init-db.ts"
+    "db:seed": "tsx scripts/init-db.ts",
+    "generate-pwa-assets": "node scripts/generate-pwa-assets.js"
   },
   "dependencies": {
     "@auth/core": "^0.38.0",
@@ -69,6 +70,7 @@
     "react-hook-form": "^7.54.1",
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
+    "sharp": "^0.33.5",
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",

@@ -1,32 +1,25 @@
 import NextAuth from "next-auth"
-import type { Session, DefaultSession, NextAuthConfig } from "next-auth"
-import type { JWT } from "next-auth/jwt"
+import type { NextAuthConfig } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import GoogleProvider from "next-auth/providers/google"
 import bcrypt from "bcrypt"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { z } from "zod"
 import prisma from "@/lib/prisma"
-import { AdapterUser } from "@auth/core/adapters"
-import { Account } from "@auth/core/types"
 
 declare module "next-auth" {
-  interface Session extends DefaultSession {
+  interface Session {
     user: {
       id: string
-    } & DefaultSession["user"]
+      name?: string | null
+      email?: string | null
+      image?: string | null
+    }
   }
 }
 
-type User = {
-  id: string
-  name: string | null
-  email: string
-  image: string | null
-}
-
-export const authOptions = {
-  adapter: PrismaAdapter(prisma) as any,
+export const authConfig = {
+  adapter: PrismaAdapter(prisma),
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -78,6 +71,25 @@ export const authOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
     }),
   ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.id as string
+      }
+      return session
+    },
+  },
+  pages: {
+    signIn: "/auth/signin",
+    signOut: "/auth/signout",
+    error: "/auth/error",
+  },
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -93,27 +105,7 @@ export const authOptions = {
       },
     },
   },
-  pages: {
-    signIn: "/auth/signin",
-    signOut: "/auth/signout",
-    error: "/auth/error",
-  },
-  callbacks: {
-    async jwt({ token, user, account }) {
-      if (user) {
-        token.id = user.id
-      }
-      return token
-    },
-    async session({ session, token }: { session: Session; token: JWT }) {
-      if (session.user) {
-        session.user.id = token.id as string
-      }
-      return session
-    },
-  },
   secret: process.env.NEXTAUTH_SECRET,
 } satisfies NextAuthConfig
 
-const handler = NextAuth(authOptions)
-export { handler as GET, handler as POST }
+export const { auth, signIn, signOut } = NextAuth(authConfig)
