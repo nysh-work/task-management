@@ -1,262 +1,325 @@
 "use client"
 
 import type React from "react"
-
-import { createContext, useContext, useReducer, type ReactNode, useEffect } from "react"
-import type { NamedLocation } from "@/lib/location-service"
+import { createContext, useContext, useReducer, type ReactNode, useEffect, useState } from "react"
+import { useAuth } from "./auth-context"
+import { useToast } from "@/components/ui/use-toast"
+import { TaskWithLocations } from "@/lib/db-utils"
 
 export type TaskPriority = "low" | "medium" | "high"
 export type TaskTag = "Work" | "Personal" | "Studies" | "Hobbies" | "Misc"
 
-export interface Task {
-  id: string
-  title: string
-  description: string
-  dueDate: Date
+// Extend the TaskWithLocations type with UI-specific properties
+export interface Task extends Omit<TaskWithLocations, 'dueDate' | 'priority'> {
+  dueDate: Date | null
   priority: TaskPriority
   tag: TaskTag
-  completed: boolean
-  createdAt: Date
-  // New location-based fields
-  locationReminder?: {
-    locationId: string
-    enabled: boolean
-    notifyOnArrival: boolean
-    notifyOnDeparture: boolean
-    message?: string
-  }
 }
 
 type TaskState = {
   tasks: Task[]
+  loading: boolean
+  error: string | null
 }
 
 type TaskAction =
+  | { type: "SET_LOADING" }
+  | { type: "SET_ERROR"; error: string }
+  | { type: "LOAD_TASKS"; tasks: Task[] }
   | { type: "ADD_TASK"; task: Task }
   | { type: "UPDATE_TASK"; task: Task }
   | { type: "DELETE_TASK"; id: string }
   | { type: "TOGGLE_COMPLETE"; id: string }
-  | { type: "LOAD_TASKS"; tasks: Task[] }
-
-const initialTasks: Task[] = [
-  {
-    id: "1",
-    title: "Complete project proposal",
-    description: "Finish the draft and send for review",
-    dueDate: new Date(Date.now() + 86400000), // tomorrow
-    priority: "high",
-    tag: "Work",
-    completed: false,
-    createdAt: new Date(Date.now() - 172800000), // 2 days ago
-  },
-  {
-    id: "2",
-    title: "Grocery shopping",
-    description: "Buy fruits, vegetables, and milk",
-    dueDate: new Date(Date.now() + 172800000), // day after tomorrow
-    priority: "medium",
-    tag: "Personal",
-    completed: false,
-    createdAt: new Date(Date.now() - 86400000), // yesterday
-  },
-  {
-    id: "3",
-    title: "Study for exam",
-    description: "Review chapters 5-8",
-    dueDate: new Date(Date.now() + 432000000), // 5 days from now
-    priority: "high",
-    tag: "Studies",
-    completed: false,
-    createdAt: new Date(Date.now() - 259200000), // 3 days ago
-  },
-  {
-    id: "4",
-    title: "Practice guitar",
-    description: "Work on new song for 30 minutes",
-    dueDate: new Date(Date.now() + 86400000), // tomorrow
-    priority: "low",
-    tag: "Hobbies",
-    completed: true,
-    createdAt: new Date(Date.now() - 345600000), // 4 days ago
-  },
-  {
-    id: "5",
-    title: "Call insurance company",
-    description: "Discuss policy renewal",
-    dueDate: new Date(Date.now() + 259200000), // 3 days from now
-    priority: "medium",
-    tag: "Misc",
-    completed: false,
-    createdAt: new Date(Date.now() - 86400000), // yesterday
-  },
-]
 
 const initialState: TaskState = {
   tasks: [],
-}
-
-// Helper function to serialize and deserialize dates
-const serializeTasks = (tasks: Task[]): string => {
-  return JSON.stringify(tasks)
-}
-
-const deserializeTasks = (tasksString: string): Task[] => {
-  try {
-    const parsedTasks = JSON.parse(tasksString)
-    return parsedTasks.map((task: any) => ({
-      ...task,
-      dueDate: new Date(task.dueDate),
-      createdAt: new Date(task.createdAt),
-    }))
-  } catch (error) {
-    console.error("Error deserializing tasks:", error)
-    return []
-  }
+  loading: false,
+  error: null
 }
 
 function taskReducer(state: TaskState, action: TaskAction): TaskState {
-  let newState: TaskState
-
   switch (action.type) {
+    case "SET_LOADING":
+      return { ...state, loading: true, error: null }
+    case "SET_ERROR":
+      return { ...state, loading: false, error: action.error }
     case "LOAD_TASKS":
-      newState = {
-        ...state,
-        tasks: action.tasks,
-      }
-      break
+      return { ...state, tasks: action.tasks, loading: false, error: null }
     case "ADD_TASK":
-      newState = {
-        ...state,
-        tasks: [...state.tasks, action.task],
-      }
-      break
+      return { ...state, tasks: [action.task, ...state.tasks] }
     case "UPDATE_TASK":
-      newState = {
+      return {
         ...state,
-        tasks: state.tasks.map((task) => (task.id === action.task.id ? action.task : task)),
+        tasks: state.tasks.map((task) =>
+          task.id === action.task.id ? action.task : task
+        ),
       }
-      break
     case "DELETE_TASK":
-      newState = {
+      return {
         ...state,
         tasks: state.tasks.filter((task) => task.id !== action.id),
       }
-      break
     case "TOGGLE_COMPLETE":
-      newState = {
+      return {
         ...state,
-        tasks: state.tasks.map((task) => (task.id === action.id ? { ...task, completed: !task.completed } : task)),
+        tasks: state.tasks.map((task) =>
+          task.id === action.id
+            ? { ...task, isCompleted: !task.isCompleted }
+            : task
+        ),
       }
-      break
     default:
       return state
   }
+}
 
-  // Save to localStorage after state changes
-  if (typeof window !== "undefined") {
-    localStorage.setItem("tasks", serializeTasks(newState.tasks))
+// Convert database task to UI task
+function mapDatabaseTaskToUITask(dbTask: TaskWithLocations): Task {
+  return {
+    ...dbTask,
+    dueDate: dbTask.dueDate ? new Date(dbTask.dueDate) : null,
+    priority: (dbTask.priority || 'medium') as TaskPriority,
+    tag: 'Work' as TaskTag // Default tag since it's not in the database
   }
-
-  return newState
 }
 
-type TaskContextType = {
+interface TaskContextProps {
   state: TaskState
-  dispatch: React.Dispatch<TaskAction>
-  getTasksByDate: (date: Date) => Task[]
-  getTasksByTag: (tag: TaskTag | "All") => Task[]
-  getOpenTasks: () => Task[]
-  getCompletedTasksThisWeek: () => Task[]
-  getCreatedTasksThisWeek: () => Task[]
-  getTaskStatsByTag: () => Record<TaskTag, { completed: number; created: number }>
+  addTask: (task: Omit<Task, "id" | "createdAt" | "updatedAt">) => Promise<void>
+  updateTask: (task: Task) => Promise<void>
+  deleteTask: (id: string) => Promise<void>
+  toggleComplete: (id: string) => Promise<void>
+  refreshTasks: () => Promise<void>
 }
 
-const TaskContext = createContext<TaskContextType | undefined>(undefined)
+const TaskContext = createContext<TaskContextProps | undefined>(undefined)
 
 export function TaskProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(taskReducer, initialState)
+  const { user } = useAuth()
+  const { toast } = useToast()
 
-  // Load tasks from localStorage on initial render
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedTasks = localStorage.getItem("tasks")
-
-      if (savedTasks) {
-        const tasks = deserializeTasks(savedTasks)
-        dispatch({ type: "LOAD_TASKS", tasks })
-      } else {
-        // If no saved tasks, use initial sample tasks
-        dispatch({ type: "LOAD_TASKS", tasks: initialTasks })
-        localStorage.setItem("tasks", serializeTasks(initialTasks))
+  // Fetch tasks from the API
+  async function fetchTasks() {
+    if (!user) return;
+    
+    dispatch({ type: "SET_LOADING" })
+    
+    try {
+      const response = await fetch('/api/tasks')
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch tasks')
       }
+      
+      const data: TaskWithLocations[] = await response.json()
+      const uiTasks = data.map(mapDatabaseTaskToUITask)
+      
+      dispatch({ type: "LOAD_TASKS", tasks: uiTasks })
+    } catch (error) {
+      console.error('Error fetching tasks:', error)
+      dispatch({ type: "SET_ERROR", error: 'Failed to load tasks' })
+      
+      toast({
+        title: "Error",
+        description: "Failed to load your tasks. Please try again.",
+        variant: "destructive",
+      })
     }
-  }, [])
-
-  const getTasksByDate = (date: Date) => {
-    return state.tasks.filter(
-      (task) =>
-        task.dueDate.getDate() === date.getDate() &&
-        task.dueDate.getMonth() === date.getMonth() &&
-        task.dueDate.getFullYear() === date.getFullYear(),
-    )
   }
 
-  const getTasksByTag = (tag: TaskTag | "All") => {
-    if (tag === "All") return state.tasks
-    return state.tasks.filter((task) => task.tag === tag)
-  }
-
-  const getOpenTasks = () => {
-    return state.tasks.filter((task) => !task.completed)
-  }
-
-  const isThisWeek = (date: Date) => {
-    const now = new Date()
-    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay())
-    const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (6 - now.getDay()))
-    return date >= startOfWeek && date <= endOfWeek
-  }
-
-  const getCompletedTasksThisWeek = () => {
-    return state.tasks.filter((task) => task.completed && isThisWeek(task.dueDate))
-  }
-
-  const getCreatedTasksThisWeek = () => {
-    return state.tasks.filter((task) => isThisWeek(task.createdAt))
-  }
-
-  const getTaskStatsByTag = () => {
-    const tags: TaskTag[] = ["Work", "Personal", "Studies", "Hobbies", "Misc"]
-    const stats: Record<TaskTag, { completed: number; created: number }> = {
-      Work: { completed: 0, created: 0 },
-      Personal: { completed: 0, created: 0 },
-      Studies: { completed: 0, created: 0 },
-      Hobbies: { completed: 0, created: 0 },
-      Misc: { completed: 0, created: 0 },
+  // Fetch tasks on initial load and when user changes
+  useEffect(() => {
+    if (user) {
+      fetchTasks()
     }
+  }, [user])
 
-    const completedTasksThisWeek = getCompletedTasksThisWeek()
-    const createdTasksThisWeek = getCreatedTasksThisWeek()
+  // Add a new task
+  async function addTask(taskData: Omit<Task, "id" | "createdAt" | "updatedAt">) {
+    if (!user) return
+    
+    try {
+      // Format the task data for the API
+      const apiTaskData = {
+        title: taskData.title,
+        description: taskData.description || "",
+        dueDate: taskData.dueDate ? taskData.dueDate.toISOString() : null,
+        priority: taskData.priority,
+        // Handle locations if present
+        locations: taskData.locations?.map((loc: {
+          name: string;
+          latitude: number;
+          longitude: number;
+          radius?: number;
+          notifyOnArrival?: boolean;
+          notifyOnDeparture?: boolean;
+          reminderMessage?: string;
+        }) => ({
+          name: loc.name,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          radius: loc.radius,
+          notifyOnArrival: loc.notifyOnArrival,
+          notifyOnDeparture: loc.notifyOnDeparture,
+          reminderMessage: loc.reminderMessage
+        }))
+      }
+      
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(apiTaskData),
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to create task')
+      }
+      
+      const createdTask = await response.json()
+      dispatch({ type: "ADD_TASK", task: mapDatabaseTaskToUITask(createdTask) })
+      
+      toast({
+        title: "Success",
+        description: "Task created successfully",
+      })
+    } catch (error) {
+      console.error('Error creating task:', error)
+      
+      toast({
+        title: "Error",
+        description: "Failed to create task. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
 
-    tags.forEach((tag) => {
-      stats[tag].completed = completedTasksThisWeek.filter((task) => task.tag === tag).length
-      stats[tag].created = createdTasksThisWeek.filter((task) => task.tag === tag).length
-    })
+  // Update a task
+  async function updateTask(task: Task) {
+    if (!user) return
+    
+    try {
+      // Format the task data for the API
+      const apiTaskData = {
+        title: task.title,
+        description: task.description || "",
+        dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+        priority: task.priority,
+        isCompleted: task.isCompleted
+      }
+      
+      const response = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(apiTaskData),
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to update task')
+      }
+      
+      const updatedTask = await response.json()
+      dispatch({ type: "UPDATE_TASK", task: mapDatabaseTaskToUITask(updatedTask) })
+      
+      toast({
+        title: "Success",
+        description: "Task updated successfully",
+      })
+    } catch (error) {
+      console.error('Error updating task:', error)
+      
+      toast({
+        title: "Error",
+        description: "Failed to update task. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
 
-    return stats
+  // Delete a task
+  async function deleteTask(id: string) {
+    if (!user) return
+    
+    try {
+      const response = await fetch(`/api/tasks/${id}`, {
+        method: 'DELETE',
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete task')
+      }
+      
+      dispatch({ type: "DELETE_TASK", id })
+      
+      toast({
+        title: "Success",
+        description: "Task deleted successfully",
+      })
+    } catch (error) {
+      console.error('Error deleting task:', error)
+      
+      toast({
+        title: "Error",
+        description: "Failed to delete task. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Toggle task completion status
+  async function toggleComplete(id: string) {
+    if (!user) return
+    
+    const task = state.tasks.find(t => t.id === id)
+    if (!task) return
+    
+    try {
+      const apiTaskData = {
+        isCompleted: !task.isCompleted
+      }
+      
+      const response = await fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(apiTaskData),
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to update task completion status')
+      }
+      
+      dispatch({ type: "TOGGLE_COMPLETE", id })
+    } catch (error) {
+      console.error('Error toggling task completion:', error)
+      
+      toast({
+        title: "Error",
+        description: "Failed to update task. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Function to manually refresh tasks
+  async function refreshTasks() {
+    await fetchTasks()
   }
 
   return (
     <TaskContext.Provider
       value={{
         state,
-        dispatch,
-        getTasksByDate,
-        getTasksByTag,
-        getOpenTasks,
-        getCompletedTasksThisWeek,
-        getCreatedTasksThisWeek,
-        getTaskStatsByTag,
+        addTask,
+        updateTask,
+        deleteTask,
+        toggleComplete,
+        refreshTasks
       }}
     >
       {children}

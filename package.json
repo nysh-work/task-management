@@ -4,12 +4,19 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx scripts/init-db.ts"
   },
   "dependencies": {
+    "@auth/core": "^0.38.0",
+    "@auth/prisma-adapter": "^2.8.0",
     "@hookform/resolvers": "^3.9.1",
+    "@prisma/client": "^6.4.1",
     "@radix-ui/react-accordion": "^1.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.4",
     "@radix-ui/react-aspect-ratio": "^1.1.1",
@@ -37,10 +44,12 @@
     "@radix-ui/react-toggle": "^1.1.1",
     "@radix-ui/react-toggle-group": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.6",
+    "@types/bcrypt": "^5.0.2",
     "@types/react": "latest",
     "@types/react-big-calendar": "^1.16.1",
     "@types/react-dom": "latest",
     "autoprefixer": "^10.4.20",
+    "bcrypt": "^5.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
@@ -49,7 +58,10 @@
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
     "next": "^14.2.16",
+    "next-auth": "^5.0.0-beta.25",
     "next-themes": "latest",
+    "pg": "^8.13.3",
+    "prisma": "^6.4.1",
     "react": "^18",
     "react-big-calendar": "^1.18.0",
     "react-day-picker": "8.10.1",
@@ -61,7 +73,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
-    "zod": "^3.24.1"
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/node": "^22",
@@ -69,6 +81,7 @@
     "@types/react-dom": "^18",
     "postcss": "^8",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.3",
     "typescript": "^5"
   }
 }

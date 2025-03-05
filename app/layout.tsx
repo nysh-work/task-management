@@ -2,7 +2,11 @@ import type React from "react"
 import "@/app/globals.css"
 import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
+import { SessionProvider } from "next-auth/react"
+import { AuthProvider } from "@/context/auth-context"
+import { TaskProvider } from "@/context/task-context"
+import { cn } from "@/lib/utils"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -10,19 +14,15 @@ export const metadata: Metadata = {
   title: "Task Manager",
   description: "Manage your tasks with calendar and list views",
   manifest: "/manifest.json",
+  generator: 'v0.dev'
+}
+
+export const viewport: Viewport = {
   themeColor: "#000000",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "Task Manager",
-  },
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
-    generator: 'v0.dev'
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 }
 
 export default function RootLayout({
@@ -39,13 +39,15 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          {children}
+          <SessionProvider>
+            <AuthProvider>
+              <TaskProvider>
+                {children}
+              </TaskProvider>
+            </AuthProvider>
+          </SessionProvider>
         </ThemeProvider>
       </body>
     </html>
   )
 }
-
-
-
-import './globals.css'
